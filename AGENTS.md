@@ -40,7 +40,8 @@ homura-genuine：homura 系列轻应用的中央授权服务（许可证签发�
 - **处置强度与状态分离**：`status` 说"发生了什么"，`enforcement` 说"该拦多少"，`notice` 说"怎么告诉用户"。
   三者都由中心控制、可随时调整；`active` 时 enforcement 恒为 `none`，不给消费侧留误拦的余地
 - **强提醒是无条件的**：只要 status 非 active 就一定有 notice 文案（中心没写就自动生成），
-  因为"每次使用强提醒、无差别提示所有用户"是硬要求，不能依赖运营记得填
+  因为"每次使用强提醒、无差别提示所有用户"是硬要求，不能依赖运营记得填。
+  active 时**只透传中心显式写的**文案（到期前预警用），不自动生成、也不影响功能
 - **自助注册 = 放弃实例管控**：`allowSelfRegister` 开着时每个 instanceKey 各签一张。
   要一实例一授权就关掉它、走 licenseKey 预签发（换实例复用会撞 `instance_mismatch` 403）
 

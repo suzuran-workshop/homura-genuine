@@ -69,7 +69,9 @@ GENUINE_ADMIN_TOKEN=... GENUINE_DB_PATH=./data/genuine.db pnpm start
 
 ### 处置强度（enforcement）
 
-`status` 不是 active 时，消费侧按下表处置；**无论哪一档，都会每次响应带强提醒**（`notice`）：
+`status` 不是 active 时，消费侧按下表处置；**无论哪一档，都会每次响应带强提醒**（`notice`）。
+`active` 时若中心显式写了 `notice`（到期前预警、运营通知），消费侧也会照常展示，但不影响任何功能——
+自动生成的文案只在非 active 时出现：
 
 | 值       | 消费侧行为                                                              |
 | -------- | ----------------------------------------------------------------------- |
