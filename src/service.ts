@@ -95,10 +95,12 @@ export class LicenseService {
   /**
    * 强提醒文案：中心显式设置优先，否则按状态自动生成。
    * 只要 status 不是 active 就一定有文案——「每次使用强提醒、无差别提示所有用户」是硬要求。
+   * active 时**只透传中心显式写的文案**（到期前预警、运营通知），不自动生成。
    */
   noticeFor(row: LicenseRow, status: LicenseStatus, now: number = Date.now()): string | null {
-    if (status === 'active') return null
-    if (row.notice && row.notice.trim() !== '') return row.notice
+    const explicit = row.notice && row.notice.trim() !== '' ? row.notice : null
+    if (status === 'active') return explicit
+    if (explicit) return explicit
     if (status === 'expired') {
       const when =
         row.expiresAt !== null ? new Date(row.expiresAt).toISOString().slice(0, 10) : '未知日期'

@@ -208,6 +208,23 @@ describe('到期与处置（需求 1：中心设期限、可随时调整；消�
     expect(service.effectiveStatus(rv.value)).toBe('suspended')
   })
 
+  it('active 时透传中心显式文案（到期前预警），未设置则为 null', () => {
+    const { service, db } = setup()
+    product(service, db)
+    const issued = service.issueLicense({ productId: 'tpl', appId: 'a', expiresInDays: 10 })
+    if (!issued.ok) throw new Error('unreachable')
+    expect(service.entitlementFor(issued.value).notice).toBeNull()
+    const r = service.adjustLicense(issued.value.licenseId, {
+      notice: '将于 10 天后到期，请及时续期',
+    })
+    if (!r.ok) throw new Error('unreachable')
+    const ent = service.entitlementFor(r.value)
+    expect(ent.status).toBe('active')
+    expect(ent.notice).toBe('将于 10 天后到期，请及时续期')
+    // 预警不该影响功能：active 时处置强度恒为 none
+    expect(ent.enforcement).toBe('none')
+  })
+
   it('active 时 enforcement 恒为 none（不给消费侧留误拦的余地）', () => {
     const { service, db } = setup()
     product(service, db, { defaultEnforcement: 'all' })

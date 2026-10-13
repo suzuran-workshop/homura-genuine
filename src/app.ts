@@ -160,6 +160,10 @@ export function buildApp(opts: BuildAppOptions = {}): BuiltApp {
         body['enforcement'] === undefined ? undefined : asEnforcement(body['enforcement']),
       features: Array.isArray(body['features']) ? (body['features'] as string[]) : undefined,
       notice: typeof body['notice'] === 'string' ? body['notice'] : null,
+      // 心跳与宽限可按许可调整：端到端演练需要秒级心跳，生产用分钟级
+      heartbeatIntervalSec:
+        typeof body['heartbeatIntervalSec'] === 'number' ? body['heartbeatIntervalSec'] : undefined,
+      graceSec: typeof body['graceSec'] === 'number' ? body['graceSec'] : undefined,
     })
     if (!result.ok) return send(c, result)
     return c.json({ license: service.describe(result.value) }, 201)
