@@ -1,0 +1,19 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 数据库与密钥（都不许进版本库）
+data/
+*.db
+*.db-journal
+keys/
+*.pem
+
+# 环境
+.env
+.env.local
+homura.config.env
+
+coverage/
+.DS_Store
+*.log
