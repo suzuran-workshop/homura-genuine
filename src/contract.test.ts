@@ -3,6 +3,7 @@ import {
   canonicalize,
   isEntitlementExpired,
   keyIdOf,
+  normalizePem,
   verifyEntitlement,
   type LicenseEntitlement,
 } from './contract.js'
@@ -136,6 +137,21 @@ describe('Ed25519 签发与验签', () => {
     expect(keyIdOf(KEY.publicKey)).toBe(KEY.keyId)
     expect(KEY.keyId).toMatch(/^[0-9a-f]{16}$/)
     expect(KEY.publicKey).not.toContain(KEY.privateKey.slice(0, 40))
+  })
+
+  it('keyIdOf 对 PEM 空白不敏感（尾随换行 / CRLF / 首尾空格）', () => {
+    // 手工从启动日志复制公钥时尾随换行会丢，若 keyId 对此敏感就会伪装成「密钥轮换事故」
+    const pem = KEY.publicKey
+    expect(keyIdOf(pem.trim())).toBe(KEY.keyId)
+    expect(keyIdOf(`${pem}\n`)).toBe(KEY.keyId)
+    expect(keyIdOf(`  ${pem.replace(/\n/g, '\r\n')}  `)).toBe(KEY.keyId)
+    expect(normalizePem('  a\r\nb  ')).toBe('a\nb')
+  })
+
+  it('验签不因公钥 PEM 的空白差异而失败', () => {
+    const signed = signEntitlement(ent(), KEY.privateKey, keyIdOf(KEY.publicKey.trim()))
+    expect(verifyEntitlement(signed, `${KEY.publicKey}\n`)).toEqual({ ok: true })
+    expect(verifyEntitlement(signed, KEY.publicKey.trim())).toEqual({ ok: true })
   })
 })
 

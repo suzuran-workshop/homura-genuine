@@ -172,9 +172,21 @@ export function canonicalize(value: unknown): string {
 // 签发侧（generateSigningKey / signEntitlement）只在中心，故不在本文件里；
 // 验签侧两侧都要用，所以放这里并纳入 parity 比对。
 
-/** keyId = sha256(公钥 PEM) 前 16 位 hex（稳定、可写日志、不含密钥材料） */
+/**
+ * 规范化 PEM：统一换行 + 去首尾空白。
+ *
+ * 必须有这一步：`keyObject.export({format:'pem'})` 产出的 PEM **带尾随换行**，而运营从启动日志
+ * 或文档复制到配置文件时通常没有。keyId 是对 PEM 字节做 sha256，差一个换行就算出不同 keyId，
+ * 表现为「keyId 不匹配 → 中心可能已轮换密钥」——一个纯空白差异伪装成密钥轮换事故。
+ * （双端联调时真实踩到过，故此处规范化并加测试锁住。）
+ */
+export function normalizePem(pem: string): string {
+  return pem.replace(/\r\n/g, '\n').trim()
+}
+
+/** keyId = sha256(规范化后的公钥 PEM) 前 16 位 hex（稳定、可写日志、不含密钥材料） */
 export function keyIdOf(publicKeyPem: string): string {
-  return createHash('sha256').update(publicKeyPem).digest('hex').slice(0, 16)
+  return createHash('sha256').update(normalizePem(publicKeyPem)).digest('hex').slice(0, 16)
 }
 
 export type VerifyResult = { ok: true } | { ok: false; reason: string }
