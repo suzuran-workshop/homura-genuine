@@ -18,9 +18,9 @@ import {
   type RegisterRequest,
   type RegisterResponse,
   type SignedEntitlement,
-} from './contract.js'
-import type { GenuineDb, LicenseRow, ProductRow } from './db.js'
-import { generateSigningKey, signEntitlement } from './sign.js'
+} from '@homura-genuine/contract/contract'
+import type { GenuineDb, LicenseRow, ProductRow } from './db.ts'
+import { generateSigningKey, signEntitlement } from './sign.ts'
 
 export type ServiceResult<T> =
   { ok: true; value: T } | { ok: false; status: number; error: string; message: string }

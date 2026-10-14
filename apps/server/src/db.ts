@@ -10,7 +10,7 @@
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Enforcement } from './contract.js'
+import type { Enforcement } from '@homura-genuine/contract/contract'
 
 /** 中心手动状态（有效状态还要叠加到期计算，见 service.ts） */
 export type ManualStatus = 'active' | 'suspended' | 'revoked'

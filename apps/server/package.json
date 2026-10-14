@@ -1,0 +1,27 @@
+{
+  "name": "@homura-genuine/server",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "homura 中央授权服务：签发/到期/功能范围/Ed25519 签名下发 + 管理台同源托管",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node --env-file-if-exists=../../.env --experimental-strip-types src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@homura-genuine/contract": "workspace:*",
+    "@hono/node-server": "^1.19.0",
+    "hono": "^4.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

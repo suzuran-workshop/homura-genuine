@@ -11,9 +11,9 @@ import {
   GENUINE_ERROR_CODES,
   type GenuineErrorBody,
   type KeyInfo,
-} from './contract.js'
-import { GenuineDb } from './db.js'
-import { LicenseService, type ServiceResult } from './service.js'
+} from '@homura-genuine/contract/contract'
+import { GenuineDb } from './db.ts'
+import { LicenseService, type ServiceResult } from './service.ts'
 
 export interface BuildAppOptions {
   /** 缺省用内存库（测试）；生产由 server.ts 传文件库 */

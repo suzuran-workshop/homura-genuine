@@ -3,7 +3,10 @@ dist/
 *.tsbuildinfo
 
 # 数据库与密钥（都不许进版本库）
-data/
+# /data/ 根锚定：只忽略仓库根的库目录。故意不锚定 *.db —— 它是安全网，任何位置的
+# .db 都绝不进库；同时若 repoRoot 重锚定失效、在 apps/server/data/ 误建了库，
+# 其 WAL 临时文件（*.db-shm/*.db-wal 未被忽略）会暴露在 git status，成为第二道告警。
+/data/
 *.db
 *.db-journal
 keys/
@@ -17,3 +20,4 @@ homura.config.env
 coverage/
 .DS_Store
 *.log
+logs/

@@ -11,7 +11,7 @@ import {
   keyIdOf,
   type LicenseEntitlement,
   type SignedEntitlement,
-} from './contract.js'
+} from '@homura-genuine/contract/contract'
 
 export interface SigningKey {
   keyId: string

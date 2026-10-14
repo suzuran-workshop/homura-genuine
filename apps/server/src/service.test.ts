@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { verifyEntitlement } from './contract.js'
-import { GenuineDb } from './db.js'
-import { LicenseService } from './service.js'
+import { verifyEntitlement } from '@homura-genuine/contract/contract'
+import { GenuineDb } from './db.ts'
+import { LicenseService } from './service.ts'
 
 const DAY = 86_400_000
 

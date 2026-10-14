@@ -5,9 +5,9 @@
  * （homura 的 GENUINE_PUBLIC_KEY / GENUINE_KEY_ID，经 config/homura.config.env 投递）。
  */
 import { serve } from '@hono/node-server'
-import { buildApp } from './app.js'
-import { GenuineDb } from './db.js'
-import { loadConfig } from './env.js'
+import { buildApp } from './app.ts'
+import { GenuineDb } from './db.ts'
+import { loadConfig } from './env.ts'
 
 const config = loadConfig()
 const db = new GenuineDb(config.dbPath)

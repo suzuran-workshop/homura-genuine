@@ -3,28 +3,25 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@12.4.1",
   "description": "homura 中央授权服务：许可证签发、到期与功能范围控制、Ed25519 签名下发（消费侧见 ../homura 的 @homurajs/license）",
   "engines": {
     "node": ">=22.5"
   },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "node --experimental-strip-types src/server.ts",
-    "typecheck": "tsc --noEmit",
+    "dev": "concurrently -k -n server,web -c cyan,magenta \"pnpm --filter @homura-genuine/server dev\" \"wait-on tcp:8787 && pnpm --filter @homura-genuine/web dev\"",
+    "build": "pnpm --filter @homura-genuine/web build",
+    "start": "pnpm --filter @homura-genuine/server start",
     "test": "vitest run",
-    "keygen": "tsx scripts/keygen.ts",
+    "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
-  "dependencies": {
-    "hono": "^4.10.0"
-  },
   "devDependencies": {
-    "@hono/node-server": "^1.19.0",
-    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.4",
     "prettier": "^3.6.0",
-    "tsx": "^4.20.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "wait-on": "^9.1.0"
   }
 }

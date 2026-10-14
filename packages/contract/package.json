@@ -1,0 +1,20 @@
+{
+  "name": "@homura-genuine/contract",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "homura-genuine 契约事实源：跨仓库逐字同步的 contract.ts + 中心内部的管理端点类型 admin.ts（零构建 TS 源码直引）",
+  "exports": {
+    "./contract": "./src/contract.ts",
+    "./admin": "./src/admin.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

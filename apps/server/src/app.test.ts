@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { HeartbeatResponse, RegisterResponse } from './contract.js'
-import { verifyEntitlement } from './contract.js'
-import { buildApp } from './app.js'
-import { GenuineDb } from './db.js'
+import type { HeartbeatResponse, RegisterResponse } from '@homura-genuine/contract/contract'
+import { verifyEntitlement } from '@homura-genuine/contract/contract'
+import { buildApp } from './app.ts'
+import { GenuineDb } from './db.ts'
 
 const TOKEN = 'admin-token-abc'
 
