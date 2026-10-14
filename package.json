@@ -1,6 +1,6 @@
 {
   "name": "homura-genuine",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "description": "homura 中央授权服务：许可证签发、到期与功能范围控制、Ed25519 签名下发（消费侧见 ../homura 的 @homurajs/license）",

@@ -54,3 +54,9 @@ homura-genuine：homura 系列轻应用的中央授权服务（许可证签发�
 - `src/app.ts` — Hono 装配：契约端点（公开）+ 管理端点（bearer）+ 公钥分发
 - `src/env.ts` — 配置装载（无默认密钥；未配 token 则管理接口禁用）
 - `src/server.ts` — 入口：监听 PORT/HOST，启动时打印公钥与 keyId
+- `docs/PRD.md` — 产品目标、用户场景、功能表、范围与非目标
+- `docs/ARCHITECTURE.md` — 系统概述、模块表、数据流、外部系统、技术边界
+- `docs/DECISIONS.md` — 14 条 ADR（签名方案、状态计算、契约同步、密钥轮换等）
+- `docs/specs/module-contract.md` — 契约与签名的行为/约束/验收
+- `docs/specs/module-lifecycle.md` — register/heartbeat/adjust 与有效状态机
+- `docs/specs/module-admin.md` — 管理端点鉴权与典型运营动作

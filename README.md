@@ -122,6 +122,15 @@ curl -X PATCH localhost:8787/admin/licenses/<id> ... -d '{"status":"suspended"}'
 （含 `canonicalize` 与 `verifyEntitlement`——它们决定签名字节与验签判定，两侧不一致就等于验签失效）。
 改契约 = 同步两侧 + 跑 parity 测试 + 在两侧 DECISIONS/spec 留痕。详见 `AGENTS.md`。
 
+## 文档
+
+- `docs/PRD.md` — 产品目标、用户场景、功能表、范围与非目标
+- `docs/ARCHITECTURE.md` — 系统概述、模块表、数据流、外部系统、技术边界
+- `docs/DECISIONS.md` — 14 条 ADR（签名方案、状态计算、契约同步、密钥轮换等）
+- `docs/specs/module-contract.md` — 契约与签名的行为/约束/验收
+- `docs/specs/module-lifecycle.md` — register/heartbeat/adjust 与有效状态机
+- `docs/specs/module-admin.md` — 管理端点鉴权与典型运营动作
+
 ## 开发
 
 ```bash
