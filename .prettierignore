@@ -1,0 +1,9 @@
+# 契约文件逐字跨仓库同步（../homura/packages/license/src/contract.ts），字节形态由同步协议管辖，
+# 不归任何单侧的 formatter：.prettierrc 的 endOfLine:lf 会把 CRLF 改成 LF，而 parity 是字节级比对，
+# 一跑 pnpm format 就会破坏同步（表现为 contract-parity 测试「契约漂移」）。故此处冻结。
+# 改契约的正确姿势见 contract.ts 顶部注释：改一侧 → cp 到另一侧 → 跑 parity 测试 → 两侧写 ADR/spec。
+packages/contract/src/contract.ts
+
+# 构建产物与锁文件不需要格式化
+dist/
+pnpm-lock.yaml

@@ -329,3 +329,65 @@ describe('签名密钥', () => {
     expect(hb.value.license.keyId).toBe(newKey.keyId)
   })
 })
+
+describe('describeProduct — 对外干净形状（把 sqlite 存储怪味关在后端）', () => {
+  it('allowSelfRegister 从 0/1 转真 boolean，defaultFeatures 从 JSON 文本转 string[]', () => {
+    const { db, service } = setup()
+    db.upsertProduct({
+      id: 'tpl',
+      name: '模板产品',
+      defaultFeatures: ['basic', 'export'],
+      defaultEnforcement: 'core',
+      defaultTtlDays: 30,
+      allowSelfRegister: true,
+    })
+    const row = db.getProduct('tpl')!
+    // 存储层：0/1 整数 + JSON 文本
+    expect(row.allowSelfRegister).toBe(1)
+    expect(typeof row.defaultFeatures).toBe('string')
+
+    const view = service.describeProduct(row)
+    // 对外：真 boolean + string[]
+    expect(view.allowSelfRegister).toBe(true)
+    expect(view.defaultFeatures).toEqual(['basic', 'export'])
+    expect(view.defaultEnforcement).toBe('core')
+    expect(view.defaultTtlDays).toBe(30)
+    expect(view.id).toBe('tpl')
+    expect(view.name).toBe('模板产品')
+    // createdAt 转成 ISO-8601 字符串
+    expect(typeof view.createdAt).toBe('string')
+    expect(Number.isNaN(Date.parse(view.createdAt))).toBe(false)
+  })
+
+  it('allowSelfRegister=0 → false；defaultTtlDays=null 原样透传（永不过期）', () => {
+    const { db, service } = setup()
+    db.upsertProduct({
+      id: 'p2',
+      name: 'p2',
+      defaultFeatures: [],
+      defaultEnforcement: 'all',
+      defaultTtlDays: null,
+      allowSelfRegister: false,
+    })
+    const view = service.describeProduct(db.getProduct('p2')!)
+    expect(view.allowSelfRegister).toBe(false)
+    expect(view.defaultTtlDays).toBeNull()
+    expect(view.defaultFeatures).toEqual([])
+  })
+
+  it('损坏的 defaultFeatures JSON 文本 → 回落空数组（不抛异常）', () => {
+    const { db, service } = setup()
+    db.upsertProduct({
+      id: 'p3',
+      name: 'p3',
+      defaultFeatures: [],
+      defaultEnforcement: 'all',
+      defaultTtlDays: null,
+      allowSelfRegister: false,
+    })
+    const row = db.getProduct('p3')!
+    // 直接构造损坏文本，模拟历史脏数据
+    const corrupted = { ...row, defaultFeatures: '不是 JSON' }
+    expect(service.describeProduct(corrupted).defaultFeatures).toEqual([])
+  })
+})

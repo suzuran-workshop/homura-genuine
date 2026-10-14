@@ -41,15 +41,15 @@ keyId，不一致等于验签静默失效）。由 `contract-parity.test.ts` 逐
 
 ## 核心模块
 
-| 模块 | 文件 | 职责 |
-| ---- | ---- | ---- |
-| 契约 | `src/contract.ts` | 状态/处置强度/授权载荷类型；端点常量；错误码；`canonicalize`（确定性序列化）；`normalizePem`（PEM 归一）；`keyIdOf`；`verifyEntitlement`（消费侧共用）；`isEntitlementExpired`（本地到期判定）。**只允许依赖 Node 内置**——会被 App 侧打进 bundle |
-| 签名 | `src/sign.ts` | 签发侧专用：Ed25519 密钥生成、`signEntitlement(entitlement, privatePem)`。验签在 contract.ts（两侧共用） |
-| 存储 | `src/db.ts` | `node:sqlite` 存储层。三张表：`products` / `licenses` / `signing_keys`。**只做存取，不含业务**。布尔存 0/1、时间存 ms epoch 整数、数组存 JSON 文本 |
-| 业务 | `src/service.ts` | 全部业务规则：有效状态计算（`revoked\|suspended` → suspended；`expiresAt` 已过 → expired；否则 active）、TTL 到期、功能范围、提醒文案自动生成、`register`/`heartbeat`/`issueLicense`/`adjustLicense`。**时间参数化**（`now` 注入，缺省 `Date.now()`），测试不依赖真实时钟、不 sleep |
-| HTTP | `src/app.ts` | Hono 装配：契约端点公开，管理端点走 Bearer token 中间件（`timingSafeEqual` 比对）。**HTTP 层不做业务判断**——只做请求解析、鉴权、结果编码 |
-| 配置 | `src/env.ts` | 环境变量装载（`GENUINE_PORT`/`HOST`/`DB_PATH`/`ADMIN_TOKEN`/`LOG_LEVEL`）。无默认密钥；未配 token 则管理接口整体禁用 |
-| 入口 | `src/server.ts` | 监听 PORT/HOST，启动时确保签名密钥存在（首次启动自动生成 + 入库），打印公钥与 keyId |
+| 模块 | 文件              | 职责                                                                                                                                                                                                                                                                                |
+| ---- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 契约 | `src/contract.ts` | 状态/处置强度/授权载荷类型；端点常量；错误码；`canonicalize`（确定性序列化）；`normalizePem`（PEM 归一）；`keyIdOf`；`verifyEntitlement`（消费侧共用）；`isEntitlementExpired`（本地到期判定）。**只允许依赖 Node 内置**——会被 App 侧打进 bundle                                    |
+| 签名 | `src/sign.ts`     | 签发侧专用：Ed25519 密钥生成、`signEntitlement(entitlement, privatePem)`。验签在 contract.ts（两侧共用）                                                                                                                                                                            |
+| 存储 | `src/db.ts`       | `node:sqlite` 存储层。三张表：`products` / `licenses` / `signing_keys`。**只做存取，不含业务**。布尔存 0/1、时间存 ms epoch 整数、数组存 JSON 文本                                                                                                                                  |
+| 业务 | `src/service.ts`  | 全部业务规则：有效状态计算（`revoked\|suspended` → suspended；`expiresAt` 已过 → expired；否则 active）、TTL 到期、功能范围、提醒文案自动生成、`register`/`heartbeat`/`issueLicense`/`adjustLicense`。**时间参数化**（`now` 注入，缺省 `Date.now()`），测试不依赖真实时钟、不 sleep |
+| HTTP | `src/app.ts`      | Hono 装配：契约端点公开，管理端点走 Bearer token 中间件（`timingSafeEqual` 比对）。**HTTP 层不做业务判断**——只做请求解析、鉴权、结果编码                                                                                                                                            |
+| 配置 | `src/env.ts`      | 环境变量装载（`GENUINE_PORT`/`HOST`/`DB_PATH`/`ADMIN_TOKEN`/`LOG_LEVEL`）。无默认密钥；未配 token 则管理接口整体禁用                                                                                                                                                                |
+| 入口 | `src/server.ts`   | 监听 PORT/HOST，启动时确保签名密钥存在（首次启动自动生成 + 入库），打印公钥与 keyId                                                                                                                                                                                                 |
 
 ## 模块关系
 
@@ -120,6 +120,7 @@ sign.signEntitlement(...)
 ```
 
 App 侧收到响应后：
+
 1. 用内嵌公钥 `verifyEntitlement(signed, publicKey)` → `verified | invalid | unverified`
 2. `verified` 时采信载荷全部字段；`invalid` 时进入最严处置（enforcement=all、features 全拒、
    notice 换安全告警）

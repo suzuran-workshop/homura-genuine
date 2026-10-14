@@ -149,8 +149,18 @@ curl -X PATCH localhost:8787/admin/licenses/<id> $H -d '{"heartbeatIntervalSec":
 ```json
 {
   "keys": [
-    { "keyId": "7d1e307a427ea52f", "publicKey": "-----BEGIN PUBLIC KEY-----\n...", "createdAt": "...", "retired": false },
-    { "keyId": "fd32b3f87862288b", "publicKey": "-----BEGIN PUBLIC KEY-----\n...", "createdAt": "...", "retired": true }
+    {
+      "keyId": "7d1e307a427ea52f",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\n...",
+      "createdAt": "...",
+      "retired": false
+    },
+    {
+      "keyId": "fd32b3f87862288b",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\n...",
+      "createdAt": "...",
+      "retired": true
+    }
   ]
 }
 ```

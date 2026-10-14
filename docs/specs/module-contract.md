@@ -11,21 +11,21 @@
 
 ### 授权载荷 `LicenseEntitlement`
 
-| 字段 | 类型 | 含义 | 为什么必须在签名覆盖范围内 |
-| ---- | ---- | ---- | -------------------------- |
-| `licenseId` | string | 许可唯一 ID | 标识 |
-| `productId` | string | 产品 ID | 防跨产品挪用 |
-| `appId` | string | App ID | 防跨 App 挪用 |
-| `instanceKey` | string | 绑定的实例 | **防把 A 实例的授权响应重放给 B 实例** |
-| `status` | `active\|expired\|suspended` | 有效状态 | 防把 expired/suspended 改成 active |
-| `expiresAt` | string \| null | ISO 到期时间（null = 永不过期） | **防把到期日改晚** |
-| `enforcement` | `none\|notice\|core\|all` | 处置强度 | 防篡改者自选最宽处置 |
-| `features` | string[] | 授权的功能范围 | 防自己给自己加功能 |
-| `notice` | string \| null | 强提醒文案 | 防把提醒文案抹掉 |
-| `issuedAt` | string | 签发时间（ISO） | 审计 |
-| `serverTime` | string | 中心当前时间（ISO） | **供消费侧校正本地时钟偏差，防回拨系统时间绕过到期** |
-| `heartbeatIntervalSec` | number | 心跳间隔 | 防把心跳周期改长（延迟处置生效） |
-| `graceSec` | number | 失联宽限期 | 防把宽限期改长 |
+| 字段                   | 类型                         | 含义                            | 为什么必须在签名覆盖范围内                           |
+| ---------------------- | ---------------------------- | ------------------------------- | ---------------------------------------------------- |
+| `licenseId`            | string                       | 许可唯一 ID                     | 标识                                                 |
+| `productId`            | string                       | 产品 ID                         | 防跨产品挪用                                         |
+| `appId`                | string                       | App ID                          | 防跨 App 挪用                                        |
+| `instanceKey`          | string                       | 绑定的实例                      | **防把 A 实例的授权响应重放给 B 实例**               |
+| `status`               | `active\|expired\|suspended` | 有效状态                        | 防把 expired/suspended 改成 active                   |
+| `expiresAt`            | string \| null               | ISO 到期时间（null = 永不过期） | **防把到期日改晚**                                   |
+| `enforcement`          | `none\|notice\|core\|all`    | 处置强度                        | 防篡改者自选最宽处置                                 |
+| `features`             | string[]                     | 授权的功能范围                  | 防自己给自己加功能                                   |
+| `notice`               | string \| null               | 强提醒文案                      | 防把提醒文案抹掉                                     |
+| `issuedAt`             | string                       | 签发时间（ISO）                 | 审计                                                 |
+| `serverTime`           | string                       | 中心当前时间（ISO）             | **供消费侧校正本地时钟偏差，防回拨系统时间绕过到期** |
+| `heartbeatIntervalSec` | number                       | 心跳间隔                        | 防把心跳周期改长（延迟处置生效）                     |
+| `graceSec`             | number                       | 失联宽限期                      | 防把宽限期改长                                       |
 
 ### `canonicalize(value)`
 

@@ -4,14 +4,30 @@
  * 启动时会打印当前签名公钥与 keyId —— 运营需要把它配到 App 侧
  * （homura 的 GENUINE_PUBLIC_KEY / GENUINE_KEY_ID，经 config/homura.config.env 投递）。
  */
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { serve } from '@hono/node-server'
 import { buildApp } from './app.ts'
 import { GenuineDb } from './db.ts'
 import { loadConfig } from './env.ts'
+import { repoRoot } from './paths.ts'
 
 const config = loadConfig()
 const db = new GenuineDb(config.dbPath)
-const { app, service } = buildApp({ db, adminToken: config.adminToken })
+
+// web 管理台构建产物目录。存在才挂静态托管；不存在（开发期还没 pnpm build）则跳过，
+// 服务照常起，只是访问 / 会得到 JSON 404——故此处显式告警，免得「忘了 build」表现成迷惑的 404。
+const webRoot = resolve(repoRoot(), 'apps/web/dist')
+const hasWeb = existsSync(webRoot)
+if (!hasWeb) {
+  console.warn('[genuine] 未找到 web 构建产物（apps/web/dist）→ 管理台不可用，先跑 pnpm build')
+}
+
+const { app, service } = buildApp({
+  db,
+  adminToken: config.adminToken,
+  webRoot: hasWeb ? webRoot : undefined,
+})
 
 const key = service.activeKey()
 if (key) {

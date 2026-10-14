@@ -38,7 +38,12 @@ describe('admin.ts 不得把 contract 的运行值泄漏给浏览器', () => {
   })
 
   it('源码里不出现 node:crypto 与契约的运行值符号', () => {
-    for (const banned of ['node:crypto', 'GENUINE_ERROR_CODES', 'GENUINE_ENDPOINTS', 'canonicalize']) {
+    for (const banned of [
+      'node:crypto',
+      'GENUINE_ERROR_CODES',
+      'GENUINE_ENDPOINTS',
+      'canonicalize',
+    ]) {
       expect(src, `admin.ts 出现了不该有的运行值引用：${banned}`).not.toContain(banned)
     }
   })

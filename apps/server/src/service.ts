@@ -19,6 +19,7 @@ import {
   type RegisterResponse,
   type SignedEntitlement,
 } from '@homura-genuine/contract/contract'
+import type { AdminProduct } from '@homura-genuine/contract/admin'
 import type { GenuineDb, LicenseRow, ProductRow } from './db.ts'
 import { generateSigningKey, signEntitlement } from './sign.ts'
 
@@ -310,6 +311,23 @@ export class LicenseService {
       heartbeatIntervalSec: row.heartbeatIntervalSec,
       graceSec: row.graceSec,
       lastSeenAt: row.lastSeenAt === null ? null : new Date(row.lastSeenAt).toISOString(),
+      createdAt: new Date(row.createdAt).toISOString(),
+    }
+  }
+
+  /**
+   * 对外视图（产品）：把 sqlite 存储怪味关在后端，与 describe() 对称。
+   * 库里 allowSelfRegister 存 0/1（node:sqlite 不接受 boolean 绑定）、defaultFeatures 存 JSON 文本
+   * （sqlite 无数组类型）——管理台不该关心这些，故此处转成真 boolean 与 string[]。
+   */
+  describeProduct(row: ProductRow): AdminProduct {
+    return {
+      id: row.id,
+      name: row.name,
+      defaultFeatures: safeJsonArray(row.defaultFeatures),
+      defaultEnforcement: row.defaultEnforcement,
+      defaultTtlDays: row.defaultTtlDays,
+      allowSelfRegister: row.allowSelfRegister === 1,
       createdAt: new Date(row.createdAt).toISOString(),
     }
   }

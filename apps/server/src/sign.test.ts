@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { keyIdOf, normalizePem, verifyEntitlement, type LicenseEntitlement } from '@homura-genuine/contract/contract'
+import {
+  keyIdOf,
+  normalizePem,
+  verifyEntitlement,
+  type LicenseEntitlement,
+} from '@homura-genuine/contract/contract'
 import { generateSigningKey, signEntitlement } from './sign.ts'
 
 /**

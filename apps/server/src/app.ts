@@ -14,12 +14,19 @@ import {
 } from '@homura-genuine/contract/contract'
 import { GenuineDb } from './db.ts'
 import { LicenseService, type ServiceResult } from './service.ts'
+import { createStaticMiddleware } from './static.ts'
 
 export interface BuildAppOptions {
   /** 缺省用内存库（测试）；生产由 server.ts 传文件库 */
   db?: GenuineDb
   /** 管理接口 bearer token；null/undefined 则 /admin/* 全部 503 */
   adminToken?: string | null
+  /**
+   * web 管理台构建产物目录（apps/web/dist）。缺省则**完全不挂静态托管**，
+   * 未匹配路径一律走 JSON notFound——保证现有 app.test.ts 的「未知路径 404 JSON」零回归。
+   * 生产由 server.ts 传入。
+   */
+  webRoot?: string
 }
 
 export interface BuiltApp {
@@ -111,7 +118,9 @@ export function buildApp(opts: BuildAppOptions = {}): BuiltApp {
     await next()
   })
 
-  admin.get('/products', (c) => c.json({ products: db.listProducts() }))
+  admin.get('/products', (c) =>
+    c.json({ products: db.listProducts().map((r) => service.describeProduct(r)) }),
+  )
 
   admin.put('/products/:id', async (c) => {
     const id = c.req.param('id')
@@ -126,7 +135,7 @@ export function buildApp(opts: BuildAppOptions = {}): BuiltApp {
       defaultTtlDays: typeof body['defaultTtlDays'] === 'number' ? body['defaultTtlDays'] : null,
       allowSelfRegister: body['allowSelfRegister'] === true,
     })
-    return c.json({ product })
+    return c.json({ product: service.describeProduct(product) })
   })
 
   admin.get('/licenses', (c) => {
@@ -232,6 +241,12 @@ export function buildApp(opts: BuildAppOptions = {}): BuiltApp {
   })
 
   app.route('/admin', admin)
+
+  // ── web 管理台同源托管（可选）──
+  // 注册在所有 API 路由之后：路由 handler 先匹配先 finalize，本中间件只接到未匹配路径。
+  // 内部再豁免 /healthz、/v1/*、/admin/*，让 API 的未匹配路径继续走 JSON notFound。
+  // webRoot 缺省时完全不挂，未匹配路径一律 JSON notFound（保住现有 404 测试）。
+  if (opts.webRoot) app.use('*', createStaticMiddleware(opts.webRoot))
 
   app.notFound((c) =>
     c.json(
