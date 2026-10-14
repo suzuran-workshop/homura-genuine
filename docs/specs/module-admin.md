@@ -42,14 +42,17 @@ admin.use('*', async (c, next) => {
 
 语义：upsert——存在则更新，不存在则创建。`id` 从路径取。
 
-响应：`{ product: ProductRow }`
+响应：`{ product: AdminProduct }`
 
-**注意**：`defaultFeatures` 在 DB 里存 JSON 文本（sqlite 无数组类型），读时 `safeJsonArray`
-解析。`allowSelfRegister` 存 0/1（`node:sqlite` 不接受 boolean 绑定）。
+**注意**：请求体里 `allowSelfRegister` 按 `=== true` 严格判定（传 `"true"`/`1` 会被当成 false）；
+`defaultTtlDays` 非数字则记为 `null`（永不过期）。响应经 `service.describeProduct` 转成**对外干净形状**：
+`allowSelfRegister` 是真 `boolean`（库里存 0/1，`node:sqlite` 不接受 boolean 绑定）、`defaultFeatures`
+是 `string[]`（库里存 JSON 文本，读时 `safeJsonArray` 解析）、`createdAt` 是 ISO-8601 字符串。
+存储层的 0/1 与 JSON 文本怪味关在后端，管理台不必关心（见 ADR / `packages/contract/src/admin.ts` 的 `AdminProduct`）。
 
 ### `GET /admin/products` — 产品列表
 
-响应：`{ products: ProductRow[] }`
+响应：`{ products: AdminProduct[] }`（同上，经 `describeProduct` 转换）
 
 ### `POST /admin/licenses` — 预签发许可
 

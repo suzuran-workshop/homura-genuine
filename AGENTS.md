@@ -47,16 +47,32 @@ homura-genuine：homura 系列轻应用的中央授权服务（许可证签发�
 
 ## 目录速查
 
-- `src/contract.ts` — 唯一契约事实源：状态/处置强度/授权载荷类型、端点常量、错误码、`canonicalize`、`verifyEntitlement`、`isEntitlementExpired`
-- `src/sign.ts` — 签发侧：Ed25519 密钥生成与签名（验签在 contract.ts，两侧共用）
-- `src/db.ts` — `node:sqlite` 存储层：products / licenses / signing_keys
-- `src/service.ts` — 业务规则：有效状态、到期、功能范围、提醒文案、register/heartbeat、签发与调整
-- `src/app.ts` — Hono 装配：契约端点（公开）+ 管理端点（bearer）+ 公钥分发
-- `src/env.ts` — 配置装载（无默认密钥；未配 token 则管理接口禁用）
-- `src/server.ts` — 入口：监听 PORT/HOST，启动时打印公钥与 keyId
+**monorepo 布局**：pnpm workspaces（`apps/*` + `packages/*`），无 turbo/nx。
+`apps/server`（Hono 后端，无构建步骤，prod 直跑 TS）+ `apps/web`（React 管理台）+ `packages/contract`（契约，零构建源码直引）。
+
+- `packages/contract/src/contract.ts` — **唯一契约事实源**（与 `../homura` 逐字一致）：状态/处置强度/授权载荷类型、端点常量、错误码、`canonicalize`、`verifyEntitlement`、`isEntitlementExpired`。已列入 `.prettierignore`（字节形态归同步协议管）
+- `packages/contract/src/admin.ts` — 管理端点类型（`AdminProduct`/`AdminLicense`/各 Body 与信封）。**中心内部契约，不纳入 parity**；只允许 `import type` 引用 contract.ts（禁 re-export 运行值，防 `node:crypto` 泄漏进 web bundle）
+- `apps/server/src/sign.ts` — 签发侧：Ed25519 密钥生成与签名（验签在 contract.ts，两侧共用）。**中心专属，不进 contract 包**
+- `apps/server/src/db.ts` — `node:sqlite` 存储层：products / licenses / signing_keys
+- `apps/server/src/service.ts` — 业务规则：有效状态、到期、功能范围、提醒文案、register/heartbeat、签发与调整、对外视图 `describe`/`describeProduct`
+- `apps/server/src/app.ts` — Hono 装配：契约端点（公开）+ 管理端点（bearer）+ 公钥分发 + 可选静态托管
+- `apps/server/src/static.ts` — 手写静态托管中间件（同源托管 web dist）。**不用 `@hono/node-server/serve-static`**（tsx#623，见 ADR-018）
+- `apps/server/src/paths.ts` — `repoRoot()`：向上找 `pnpm-workspace.yaml` 定位仓库根（cwd 相对路径全部经它锚定，见 ADR-016）
+- `apps/server/src/env.ts` — 配置装载（无默认密钥；未配 token 则管理接口禁用；`DB_PATH` 相对路径锚定 repoRoot）
+- `apps/server/src/server.ts` — 入口：监听 PORT/HOST，启动时打印公钥与 keyId，传 webRoot 挂静态托管
+- `apps/web/src/` — 管理台：`pages/*`（7 页）、`lib/{api,auth,session,format}`（api 含 401/503 分流 + 陈旧 401 防护）、`components/ui/*`（shadcn）、`hooks/useApi.ts`。详见 `docs/specs/module-web-admin.md`
 - `docs/PRD.md` — 产品目标、用户场景、功能表、范围与非目标
 - `docs/ARCHITECTURE.md` — 系统概述、模块表、数据流、外部系统、技术边界
-- `docs/DECISIONS.md` — 14 条 ADR（签名方案、状态计算、契约同步、密钥轮换等）
+- `docs/DECISIONS.md` — 19 条 ADR（签名方案、状态计算、契约同步、密钥轮换、monorepo 布局等）
 - `docs/specs/module-contract.md` — 契约与签名的行为/约束/验收
 - `docs/specs/module-lifecycle.md` — register/heartbeat/adjust 与有效状态机
 - `docs/specs/module-admin.md` — 管理端点鉴权与典型运营动作
+- `docs/specs/module-web-admin.md` — 管理台页面、鉴权流程、401/503 分流、验收
+
+## monorepo 开发要点（改代码前必读）
+
+- **命令在仓库根跑**：`pnpm dev`（concurrently 起 server+web）、`pnpm build`（只构建 web）、`pnpm start`（prod 同源托管）、`pnpm test`（`test.projects` 聚合三包）、`pnpm typecheck`（`pnpm -r`）。单包调试用 `pnpm --filter @homura-genuine/{server,web,contract} <script>`
+- **server/contract 受「零运行依赖」约束，web 不受**：ADR-011「只依赖 Node 内置」约束的是会被打进 App 产物的 `contract.ts`；ADR-014「运行依赖只有 hono」约束的是 `apps/server`。`apps/web` 是**内部运营工具、永不分发进 App 产物**，正常引入 React 生态依赖（见 ADR-015）
+- **prod 直跑 TS 的硬约束**：server 无打包器，`node --experimental-strip-types` 只擦除类型、**不做 `.js`→`.ts` 重写**，故 server/contract 内部相对 import 一律写 `.ts` 后缀（`tsconfig.base.json` 开了 `allowImportingTsExtensions`）。**类型擦除不支持 enum / namespace / 构造函数参数属性**——server 与 contract 里禁用（dev 用 tsx 全量转换能过，prod 纯 node 会静默崩）
+- **契约 parity 是最高优先门禁**：`contract.ts` 与 `../homura` 逐字一致，`contract-parity.test.ts` 守门。它的 PEER 相对路径依赖目录层级（现退三级到仓库根再 `../homura`）；skip 判据是「对端**仓库**存在」——仓库在而文件不在会**显式失败**而非静默跳过。任何挪动 contract.ts 位置的操作都要复核这条路径
+- **改 contract.ts = 改跨仓库契约**：同步两侧 → 两侧跑测试 → 两侧写 ADR/spec。别用 `pnpm format`（已 prettierignore 冻结）。`admin.ts` 不在此列，可自由改

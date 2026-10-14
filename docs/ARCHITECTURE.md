@@ -2,12 +2,14 @@
 
 ## 系统概述
 
-单进程 Node.js 服务，运行时依赖只有 `hono`；存储用 `node:sqlite` 单文件库；签名用 `node:crypto`
-的 Ed25519。**没有任何出向网络调用**——它只被消费侧调用，不主动连任何外部系统。
+pnpm workspaces monorepo，三层：`apps/server`（Hono 后端，运行时依赖只有 `hono` + `@hono/node-server`）、
+`apps/web`（React 管理台，同源托管于 server）、`packages/contract`（跨仓库契约 + 管理端点类型，零构建源码直引）。
+存储用 `node:sqlite` 单文件库；签名用 `node:crypto` 的 Ed25519。**没有任何出向网络调用**——
+它只被消费侧调用，不主动连任何外部系统。
 
 ```
                     ┌─────────────────────────────────────────┐
-                    │         homura-genuine 进程             │
+                    │      apps/server 进程 (Hono)            │
                     │                                         │
   消费侧 App ─────► │  server.ts (监听 PORT/HOST)             │
   (../homura        │      │                                  │
@@ -18,48 +20,60 @@
                     │      ├── /v1/register   │ 契约端点      │
                     │      ├── /v1/heartbeat ─┘ (公开)        │
                     │      │                                  │
-                    │      └── /admin/*      (Bearer token)   │
-                    │             │                           │
-                    │             ▼                           │
-                    │       service.ts (业务规则)             │
-                    │             │                           │
-                    │      ┌──────┼──────┐                    │
-                    │      ▼      ▼      ▼                    │
-                    │   sign.ts  db.ts  contract.ts           │
-                    │  (Ed25519)(sqlite)(契约类型/验签)        │
+                    │      ├── /admin/*      (Bearer token)   │
+                    │      │        │                         │
+                    │      │        ▼                         │
+                    │      │  service.ts (业务规则)           │
+                    │      │   ├── sign.ts  (Ed25519)         │
+                    │      │   ├── db.ts    (sqlite)          │
+                    │      │   └── @homura-genuine/contract   │
+                    │      │        (contract.ts 验签 +       │
+                    │      │         admin.ts 管理端点类型)    │
+                    │      │                                  │
+  运营浏览器 ─────► │      └── /*  (static.ts 同源托管)       │
+  (管理台)          │             └─ apps/web/dist (SPA)      │
                     │                                         │
                     │             │                           │
                     │             ▼                           │
-                    │        ./data/genuine.db                │
+                    │   <repoRoot>/data/genuine.db            │
                     │      (products/licenses/signing_keys)   │
                     └─────────────────────────────────────────┘
+       apps/web (React 19 + Vite 8 + shadcn)  ──build──►  apps/web/dist
+         只调 /admin/* 与只读 /v1/keys、/healthz；同源，无跨域
 ```
 
-`contract.ts` 是**跨仓库契约的唯一事实源**：与 `../homura/packages/license/src/contract.ts`
+`packages/contract/src/contract.ts` 是**跨仓库契约的唯一事实源**：与 `../homura/packages/license/src/contract.ts`
 必须逐字一致（含 `canonicalize`/`normalizePem`/`verifyEntitlement`——它们决定签名字节与
-keyId，不一致等于验签静默失效）。由 `contract-parity.test.ts` 逐字比对守门。
+keyId，不一致等于验签静默失效）。由 `contract-parity.test.ts` 逐字比对守门。同目录 `admin.ts`
+是中心内部管理端点类型，**不纳入 parity**（见 ADR-017）。
 
 ## 核心模块
 
-| 模块 | 文件              | 职责                                                                                                                                                                                                                                                                                |
-| ---- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 契约 | `src/contract.ts` | 状态/处置强度/授权载荷类型；端点常量；错误码；`canonicalize`（确定性序列化）；`normalizePem`（PEM 归一）；`keyIdOf`；`verifyEntitlement`（消费侧共用）；`isEntitlementExpired`（本地到期判定）。**只允许依赖 Node 内置**——会被 App 侧打进 bundle                                    |
-| 签名 | `src/sign.ts`     | 签发侧专用：Ed25519 密钥生成、`signEntitlement(entitlement, privatePem)`。验签在 contract.ts（两侧共用）                                                                                                                                                                            |
-| 存储 | `src/db.ts`       | `node:sqlite` 存储层。三张表：`products` / `licenses` / `signing_keys`。**只做存取，不含业务**。布尔存 0/1、时间存 ms epoch 整数、数组存 JSON 文本                                                                                                                                  |
-| 业务 | `src/service.ts`  | 全部业务规则：有效状态计算（`revoked\|suspended` → suspended；`expiresAt` 已过 → expired；否则 active）、TTL 到期、功能范围、提醒文案自动生成、`register`/`heartbeat`/`issueLicense`/`adjustLicense`。**时间参数化**（`now` 注入，缺省 `Date.now()`），测试不依赖真实时钟、不 sleep |
-| HTTP | `src/app.ts`      | Hono 装配：契约端点公开，管理端点走 Bearer token 中间件（`timingSafeEqual` 比对）。**HTTP 层不做业务判断**——只做请求解析、鉴权、结果编码                                                                                                                                            |
-| 配置 | `src/env.ts`      | 环境变量装载（`GENUINE_PORT`/`HOST`/`DB_PATH`/`ADMIN_TOKEN`/`LOG_LEVEL`）。无默认密钥；未配 token 则管理接口整体禁用                                                                                                                                                                |
-| 入口 | `src/server.ts`   | 监听 PORT/HOST，启动时确保签名密钥存在（首次启动自动生成 + 入库），打印公钥与 keyId                                                                                                                                                                                                 |
+| 模块         | 文件                                | 职责                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 契约         | `packages/contract/src/contract.ts` | 状态/处置强度/授权载荷类型；端点常量；错误码；`canonicalize`（确定性序列化）；`normalizePem`（PEM 归一）；`keyIdOf`；`verifyEntitlement`（消费侧共用）；`isEntitlementExpired`（本地到期判定）。**只允许依赖 Node 内置**——会被 App 侧打进 bundle                                                                                                                        |
+| 管理端点类型 | `packages/contract/src/admin.ts`    | `/admin/*` 的请求/响应类型（`AdminProduct`、`AdminLicense`、各 Body 与信封）。**中心内部契约，不纳入 parity**；只允许 `import type` 引用 contract.ts（禁 re-export 运行值，防 `node:crypto` 泄漏进 web bundle）                                                                                                                                                         |
+| 签名         | `apps/server/src/sign.ts`           | 签发侧专用：Ed25519 密钥生成、`signEntitlement(entitlement, privatePem)`。验签在 contract.ts（两侧共用）                                                                                                                                                                                                                                                                |
+| 存储         | `apps/server/src/db.ts`             | `node:sqlite` 存储层。三张表：`products` / `licenses` / `signing_keys`。**只做存取，不含业务**。布尔存 0/1、时间存 ms epoch 整数、数组存 JSON 文本                                                                                                                                                                                                                      |
+| 业务         | `apps/server/src/service.ts`        | 全部业务规则：有效状态计算（`revoked\|suspended` → suspended；`expiresAt` 已过 → expired；否则 active）、TTL 到期、功能范围、提醒文案自动生成、`register`/`heartbeat`/`issueLicense`/`adjustLicense`、对外视图 `describe`/`describeProduct`（把 sqlite 的 0/1 与 JSON 文本转成干净形状）。**时间参数化**（`now` 注入，缺省 `Date.now()`），测试不依赖真实时钟、不 sleep |
+| HTTP         | `apps/server/src/app.ts`            | Hono 装配：契约端点公开，管理端点走 Bearer token 中间件（`timingSafeEqual` 比对），可选挂静态托管。**HTTP 层不做业务判断**——只做请求解析、鉴权、结果编码                                                                                                                                                                                                                |
+| 静态托管     | `apps/server/src/static.ts`         | 同源托管 `apps/web/dist` 的手写中间件：API 前缀豁免、仅 GET/HEAD、路径穿越防护、assets 长缓存、SPA fallback。**不用 `@hono/node-server/serve-static`**（tsx#623，见 ADR-018）                                                                                                                                                                                           |
+| 路径锚定     | `apps/server/src/paths.ts`          | `repoRoot()`：向上找 `pnpm-workspace.yaml` 定位仓库根，兜底 cwd。所有 cwd 相对路径经它解析（见 ADR-016）                                                                                                                                                                                                                                                                |
+| 配置         | `apps/server/src/env.ts`            | 环境变量装载（`GENUINE_PORT`/`HOST`/`DB_PATH`/`ADMIN_TOKEN`/`LOG_LEVEL`）。无默认密钥；未配 token 则管理接口整体禁用；`DB_PATH` 相对路径锚定 repoRoot                                                                                                                                                                                                                   |
+| 入口         | `apps/server/src/server.ts`         | 监听 PORT/HOST，启动时确保签名密钥存在（首次启动自动生成 + 入库），打印公钥与 keyId；传 webRoot 挂静态托管                                                                                                                                                                                                                                                              |
+| 管理台       | `apps/web/src/*`                    | React 19 + Vite 8 + Tailwind v4 + shadcn/ui + react-router v7。7 个页面覆盖全部运营动作；`lib/api.ts` 裸 fetch 封装（401/503 分流 + 陈旧 401 防护）；token 存 sessionStorage。详见 `specs/module-web-admin.md`                                                                                                                                                          |
 
 ## 模块关系
 
-- **依赖方向单向向下**：`server` → `app` → `service` → `sign`/`db`/`contract`
-- **`contract.ts` 无依赖**（只用 Node 内置 `node:crypto`）；被 `service.ts` 与 `sign.ts` 双向使用，
-  也被 App 侧（`../homura/packages/license`）打进 bundle
+- **依赖方向单向向下**：`server` → `app` → `service` → `sign`/`db`/`@homura-genuine/contract`
+- **`packages/contract` 无依赖**（contract.ts 只用 Node 内置 `node:crypto`；admin.ts 只类型）；
+  server 经 workspace 协议引用，也被 App 侧（`../homura/packages/license`）打进 bundle
+- **web 只调 `/admin/*` 与只读的 `/v1/keys`、`/healthz`**；同源托管，无跨域。web 对 contract 包
+  **只 `import type`**（防 `node:crypto` 进 bundle，见 ADR-017）
 - **反向依赖禁令**：本仓库不依赖 `../homura` 的任何包。授权中心依赖被授权方是反向耦合——
   需要的类型/工具在 `contract.ts` 里各自持有一份
 - **业务规则集中在 `service.ts`**：`app.ts` 是薄封装，只做请求解析与鉴权；`db.ts` 是存取原语，
-  不含"到期怎么算""文案怎么生成"这类判断
+  不含"到期怎么算""文案怎么生成"这类判断；`static.ts`/`paths.ts` 是基础设施，不含业务
 
 ## 数据流
 
@@ -154,16 +168,19 @@ service.adjustLicense(id, patch, now)
 
 - 消费侧 App（`../homura` 的 `@homurajs/license`）通过 `POST /v1/register` + `POST /v1/heartbeat`
   访问契约端点。App 必须以 https 公网可达 genuine（Pages 出网只放行 443）
-- 运营通过 `Authorization: Bearer $GENUINE_ADMIN_TOKEN` 访问 `/admin/*` 管理端点
+- 运营通过 `Authorization: Bearer $GENUINE_ADMIN_TOKEN` 访问 `/admin/*` 管理端点——
+  既可直接 curl，也可用同源托管的 `apps/web` 管理台（浏览器打开 `:8787/`，登录密钥即该 token）
 
 ## 重要技术边界
 
 ### 契约边界：contract.ts 逐字一致
 
-`src/contract.ts` 与 `../homura/packages/license/src/contract.ts` 必须**逐字一致**。
+`packages/contract/src/contract.ts` 与 `../homura/packages/license/src/contract.ts` 必须**逐字一致**。
 `canonicalize` 决定签名字节，`normalizePem` 决定 keyId——任何一侧漂移都等于验签静默失效。
 `contract-parity.test.ts` 会读出两侧文件逐字比对，报出首个不同行号并给出"cp 覆盖、别手工合并"
 的修法。改契约的流程：同步两侧文件 → 两侧各自跑测试 → 两侧各写 ADR/spec 留痕。
+⚠ 该文件已列入 `.prettierignore`：字节形态归同步协议管，formatter 的 `endOfLine:lf` 会破坏
+字节级 parity（见 ADR-017）。同目录 `admin.ts` 是中心内部类型，**不纳入 parity**。
 
 ### 密钥边界：私钥不出进程
 
@@ -179,8 +196,9 @@ Ed25519 私钥只在 `signing_keys` 表里，只在 `signEntitlement` 时被读�
 
 ### 存储边界：单文件 sqlite
 
-`node:sqlite` 是 Node 22.5+ 的内置模块，运行时零依赖。单文件 `./data/genuine.db` 承载
-所有状态。**这是当前设计上限**——不支持水平扩展，也没有复制。要 HA 得先解决私钥托管
+`node:sqlite` 是 Node 22.5+ 的内置模块，运行时零依赖。单文件 `<仓库根>/data/genuine.db` 承载
+所有状态（路径经 `repoRoot()` 锚定，见 ADR-016，不随 `pnpm --filter` 的 cwd 漂移）。
+**这是当前设计上限**——不支持水平扩展，也没有复制。要 HA 得先解决私钥托管
 （HSM/KMS）与 sqlite 复制（Litestream/rqlite），那是另一个项目。
 
 ### 时间边界：参数化注入

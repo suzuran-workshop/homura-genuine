@@ -275,3 +275,129 @@
 - 后果：中心侧要写一些看起来"重复"的代码（比如 logger、type guard），但换来的是**中心
   可以独立演进**。
 - 何时重新审视：几乎不会。
+
+## ADR-015：monorepo 三层布局（apps/server + apps/web + packages/contract），纯 pnpm workspaces
+
+- 日期：2026-10-14
+- 状态：已采纳
+- 背景：要给授权中心加一个浏览器管理台（签发/调期/停服/轮换密钥不再靠 curl）。前端与后端
+  同仓演进（管理端点形状一变，前端类型要跟着变），但二者依赖面天差地别（后端运行时只有 hono，
+  前端一整套 React 生态）。单包塞不下这种分层。
+- 考虑过的方案：
+  - **单包 + 前端塞进 src/**：依赖混在一起，"运行时只有 hono"的哲学被前端依赖污染
+  - **前端独立仓库**：管理端点类型要跨仓库同步，重演 contract.ts 的 parity 困境，不值得
+  - **monorepo，统一 packages/***：apps 与 libs 语义混在一层
+  - _*monorepo，apps/* + packages/_**：可部署应用（server/web）与被引用库（contract）分开
+- 决策：**pnpm workspaces，`apps/server` + `apps/web` + `packages/contract` 三层**。
+  不引 turbo/nx/lerna——三个包、两步构建（只 web 需要 build），workspace 协议 + `pnpm -r` 足够，
+  任务图缓存的收益抵不过维护成本。根 `package.json` 是瘦编排层，用 `concurrently`+`wait-on` 起 dev。
+- 为什么选这个：物理隔离前后端依赖面（ADR-014 的"运行时只有 hono"约束只落在 `apps/server` 与
+  `packages/contract`，`apps/web` 是内部工具不受此约束）；契约类型放 `packages/contract` 供两侧 import，
+  但**不发 npm**（见 ADR-017）；`apps/*` vs `packages/*` 的分层让"可部署"与"被引用"一眼可辨。
+- 为什么不选其他：见上。参照 `../momoi` 的同构布局（apps/server + apps/web + packages/shared），
+  降低在两仓库间切换的认知成本。
+- 后果：新增根 `tsconfig.base.json`（solution 根 `files:[]`）、`pnpm-workspace.yaml` 的 `packages` 字段、
+  4 个 `package.json`、4 个 tsconfig、根 `vitest.config.ts`（`test.projects`）。**server 保持无构建步骤**
+  （prod 仍 `node --experimental-strip-types` 直跑 TS），web 产物留 `apps/web/dist`、由 server 用
+  `repoRoot()` 定位托管——从而**不需要** momoi 那种"server 先 build、web 后 build"的顺序依赖。
+- 何时重新审视：包数量增长到任务图缓存有实际收益时（>6 包或构建 >2 分钟），可重新评估 turbo。
+
+## ADR-016：路径锚定仓库根（repoRoot）而非 cwd
+
+- 日期：2026-10-14
+- 状态：已采纳
+- 背景：monorepo 化后 `process.cwd()` 不再等于仓库根。根脚本 `pnpm --filter @homura-genuine/server dev`
+  会把 cwd 设成 `apps/server`。而 `GENUINE_DB_PATH` 的默认值原先是 `'./data/genuine.db'`（相对 cwd）。
+- 考虑过的方案：
+  - 保持 cwd 相对，文档里要求"必须在仓库根运行"：脆弱，`pnpm --filter` 天然违反
+  - 默认值写死绝对路径：不可移植
+  - **锚定仓库根**：新增 `repoRoot()`，相对路径一律 resolve 到它
+- 决策：新增 `apps/server/src/paths.ts` 的 `repoRoot()`——从 `import.meta.url` 逐级向上找含
+  `pnpm-workspace.yaml` 的目录，找不到兜底 `process.cwd()`（裸 dist 部署时行为不变）。`env.ts` 里
+  `GENUINE_DB_PATH` 的**默认值与显式相对值都过 repoRoot**；`:memory:` 与绝对路径原样透传。
+- 为什么选这个：不锚定的后果是 `pnpm --filter` 下 cwd=apps/server，会在 `apps/server/data/` **新建一个空库**，
+  而根 `data/genuine.db`（含真实授权与签名私钥）被晾在一边——表现为"授权数据全丢了、密钥也变了"，
+  极难排查。`pnpm-workspace.yaml` 是天然的仓库根标记（照抄 momoi 的 `paths.ts`）。
+- 为什么不选其他：文档约束挡不住工具链的 cwd 行为；绝对路径不可移植。
+- 后果：`data/`、web 产物 `apps/web/dist`、对端契约路径全部经 repoRoot 解析。`.gitignore` 的 `data/`
+  改成根锚定 `/data/`——这样万一锚定失效、误建了 `apps/server/data/`，其 `*.db-shm/*.db-wal` 会暴露在
+  `git status` 里，成为第二道告警（`*.db` 仍宽匹配兜底，任何位置的库文件都绝不进版本库）。
+- 何时重新审视：几乎不会。这是 monorepo 的基本卫生。
+
+## ADR-017：contract.ts 移入 packages/contract 但逐字不改、不拆包、不发 npm；admin.ts 不纳入 parity
+
+- 日期：2026-10-14
+- 状态：已采纳
+- 背景：ADR-008 否决过"把契约抽成第三方 npm 包"（理由：会给 App 产物加外部依赖 + 版本管理复杂）。
+  monorepo 化后前端也要复用契约类型，自然会想"那是不是该抽包了"。同时管理端点的类型
+  （ProductRow、describe() 视图）原先散在 `db.ts`/`service.ts`，前端拿不到。
+- 考虑过的方案：
+  - 把 contract.ts 发成 npm 包：违反 ADR-008（App 产物多一个外部依赖）
+  - 前端复制一份 admin 类型：后端改 describe() 字段时前端不报错，隐式漂移
+  - **monorepo 内部 workspace 包**：`packages/contract` 零构建源码直引，不发 npm
+- 决策：`packages/contract` 用 **exports 指向 `./src/*.ts`**（零构建，server 由 Node 类型擦除直读、
+  web 由 Vite 原生消费）。`contract.ts` **逐字不改**搬入（parity 仍守，仍与 ../homura 一致）。
+  新增 `admin.ts` 承载管理端点类型——它是**中心内部契约**，App 侧永不调 `/admin/*`，
+  故**不纳入 parity 比对**、可自由演进。
+- 为什么选这个：workspace 包只在本仓库内被 `workspace:*` 引用，**不发布、不给任何派生 App 加依赖**，
+  与 ADR-008 否决的"第三方 npm 包"是两回事——那条否决的是"让分发出去的 App 产物背一个外部依赖"，
+  本决策不触碰这个前提。`admin.ts` 只允许 `import type` 引用 contract.ts（禁 `export *`、禁 re-export
+  运行值）：否则 web 侧 import admin.ts 会把 contract.ts 顶部的 `node:crypto` 拖进浏览器 bundle，
+  而 Vite 对此只报 warning 不失败、运行时才白屏。用一条守卫测试（admin.test.ts 扫源码文本）把这条
+  静默泄漏路径变成硬失败。
+- 为什么不选其他：npm 包违反 ADR-008；前端复制类型会漂移。
+- 后果：`packages/contract/src/contract.ts` 列入 `.prettierignore`（字节形态归同步协议管，formatter
+  的 `endOfLine:lf` 会破坏字节级 parity——此坑在 `pnpm format` 后 parity 当场抓到）。parity 测试的
+  PEER 相对路径因文件下沉两级而改层级（退三级到仓库根再 `../homura`），并把 skip 判据从"对端**文件**存在"
+  改成"对端**仓库**存在"：仓库在而文件不在 = 路径算错 = **显式失败**，杜绝"层级写错→静默 skip→门禁形同虚设"。
+- 何时重新审视：若消费侧 ../homura 也迁进同一 monorepo，contract 可改为真正的内部共享包、免掉 cp 同步。
+
+## ADR-018：同源托管 web 产物 + 手写静态中间件（不用 @hono/node-server/serve-static）
+
+- 日期：2026-10-14
+- 状态：已采纳
+- 背景：管理台要部署。前后端分离部署需要后端开 CORS、前端另找静态托管、还要处理跨域凭据；
+  同源托管则单进程单端口、无跨域。
+- 考虑过的方案：
+  - **完全分离**：前端独立部署 + 后端 CORS
+  - **同源托管**：server 挂 web 的 dist + SPA fallback
+  - 用 `@hono/node-server/serve-static`：现成，但有已知坑
+- 决策：**同源托管**。`buildApp({ webRoot? })` 在传了 webRoot 时挂一个**手写**的静态中间件
+  （`apps/server/src/static.ts`），注册在所有 API 路由之后、`app.notFound` 之前；webRoot 缺省时
+  **完全不挂**（现有"未知路径→JSON 404"测试零回归）。不用 `@hono/node-server/serve-static`。
+- 为什么选这个：授权中心是单人运营的内部服务，同源托管省去 CORS 与二次部署，单端口即可对外。
+  手写中间件规避 `@hono/node-server/serve-static` 的 **tsx#623**——该子路径模块在 Windows +
+  stdout 是管道（根脚本 concurrently 下）时会让 `tsx watch` **挂死**，而本服务 dev 正是这个组合
+  （momoi 的 D15 记录并踩过同一坑，照抄其手写方案）。三条不可省的规则：① API 前缀 `/healthz|/v1|/admin`
+  豁免（否则 App 打错的端点会被 SPA fallback 吞成 200+HTML，App 拿 HTML 当授权响应解析→静默误判）；
+  ② 仅 GET/HEAD；③ 路径穿越防护。Hono 的 `app.use('*')` 注册在路由后只接未匹配路径（读 compose.js +
+  hono-base.js 源码确认），配合前缀豁免，API 的 404 仍是 JSON。
+- 为什么不选其他：分离部署对一个内部单服务是过度设计；serve-static 有实测挂死风险。
+- 后果：`pnpm build` 只构建 web；server 无构建步骤，prod 用 `repoRoot()/apps/web/dist` 定位产物，
+  目录不存在则告警但不崩溃（开发期没 build 也能起服务，只是 `/` 返回 JSON 404）。
+- 何时重新审视：若管理台需要独立灰度/CDN 分发，可拆成分离部署。
+
+## ADR-019：管理台复用 GENUINE_ADMIN_TOKEN + sessionStorage，不建独立会话体系
+
+- 日期：2026-10-14
+- 状态：已采纳
+- 背景：管理台要登录。后端 `/admin/*` 已有 bearer 鉴权（`GENUINE_ADMIN_TOKEN`）。前端要不要另建
+  一套会话（登录换 JWT、cookie、刷新续期）？
+- 考虑过的方案：
+  - 后端加登录端点签发 JWT + HttpOnly cookie（momoi 那套）：要引入会话存储、续期、失效
+  - 纯内存存 token：刷新页面就丢，体验差
+  - localStorage 存 token：长期留磁盘，共享机器风险高
+  - **sessionStorage 存 GENUINE_ADMIN_TOKEN**：关标签页即清，刷新当前标签页不用重登
+- 决策：**前端直接持有 `GENUINE_ADMIN_TOKEN`，存 sessionStorage**，每次请求注入 `Authorization: Bearer`。
+  登录页用 `GET /admin/products` 做探针验证 token 有效性，成功才落库。**不新增任何后端会话端点**。
+- 为什么选这个：授权中心是单人运营的内部工具，`GENUINE_ADMIN_TOKEN` 本就是"管理即一切"的根凭据，
+  再套一层会话体系是过度设计（要多维护登录/续期/失效逻辑，且根凭据仍在）。sessionStorage 是安全与
+  体验的折中：比 localStorage 少了长期磁盘留存，比纯内存多了"刷新不掉线"。前端严格区分 401 与 503——
+  503 = 服务端未配 token（管理接口整体禁用，不清会话、提示配置问题）；401 = token 无效（登录页内联报错，
+  其他页清会话跳登录）。复刻 momoi 的"陈旧 401"防护（登录前发出的旧请求返回的 401 不能踢掉新会话）
+  与登出 1 秒节流。
+- 为什么不选其他：JWT/cookie 方案对一个单凭据内部工具是纯增复杂度；纯内存/localStorage 各有体验或安全短板。
+- 后果：token 在 sessionStorage 里对同源 JS 可见（XSS 可读）——但本管理台无第三方脚本、无用户内容渲染，
+  XSS 面极小；且 token 本就是根凭据，持有者即可管理，多一层会话不改变这个事实。**绝不**用 localStorage。
+- 何时重新审视：若管理台要开放给多角色运营（需要区分权限、审计到人），则需引入独立身份体系
+  （对接 `../oauth2-dingtalk`），届时本决策作废。
